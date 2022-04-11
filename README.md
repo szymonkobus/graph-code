@@ -17,3 +17,7 @@ Code structure:
 		- distance + communication
 3. Utility graph printing, solution printing
 
+## Dependencies
+1. python 3.10
+2. pytorch
+3. numpy
