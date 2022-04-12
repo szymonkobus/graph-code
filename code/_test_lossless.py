@@ -3,7 +3,8 @@ import unittest
 import torch
 
 from graph import create_grid
-from lossless import dag_paths, lossless_code_NP, path_cover, shortest_path_dag
+from lossless import (dag_paths, find_shortest_path, lossless_code_NP,
+                      path_cover, shortest_path_dag)
 
 
 class LosslessTest(unittest.TestCase):
@@ -52,6 +53,22 @@ class LosslessTest(unittest.TestCase):
         exp_adj[4][5] = 1   # 3 steps
 
         self.assertTrue(torch.all(graph_dag.adj==exp_adj))
+    
+    def test_dag_2D_end(self):
+        graph = create_grid([3, 2])
+        graph.adj[1][3] = 1
+        graph.adj[3][1] = 1
+
+        graph_dag = shortest_path_dag(graph, 0, 4)
+
+        exp_adj = torch.zeros((6, 6), dtype=int)
+        exp_adj[0][1] = 1   # 1 step
+        exp_adj[0][3] = 1   # 1 step
+        exp_adj[1][2] = 1   # 2 steps
+        exp_adj[1][4] = 1   # 2 steps
+        exp_adj[3][4] = 1   # 2 steps
+        print(graph_dag.adj)
+        self.assertTrue(torch.all(graph_dag.adj==exp_adj))
         
     def test_dag_paths(self):
         graph = create_grid([3, 2])
@@ -89,6 +106,18 @@ class LosslessTest(unittest.TestCase):
             self.assertTrue(a==b)
 
     def test_lossless_NP(self):
-        graph = create_grid([2, 3])
-        cover, set_cover = lossless_code_NP(graph, 0)
-        self.assertTrue(len(cover)==2)
+        graph = create_grid([4, 4])
+        cover, set_cover = lossless_code_NP(graph, 5)
+        self.assertTrue(len(cover)==6)
+        uni = set()
+        for s in set_cover:
+            uni = uni.union(s)
+        self.assertTrue(len(uni)==16)
+
+    def test_find_shortest_path(self):
+        graph = create_grid([5, 5])
+        path = find_shortest_path(graph, 3, 6)
+        exp_path = [6, 1, 2, 3]
+        self.assertTrue(len(path)==len(exp_path))
+        for node, exp_node in zip(path, exp_path):
+            self.assertTrue(node==exp_node)
