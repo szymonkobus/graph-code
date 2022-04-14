@@ -5,13 +5,17 @@ import numpy as np
 import torch
 import yaml
 
-from graph import get_graph
-from lossless import lossless_code_NP
+from graph import create_grid, get_graph
+from lossless import lossless_code
 
 
 def run(graph):
     print(graph)
     print(graph.adj)
+
+    paths = lossless_code(graph, 5)
+    print(paths)
+    print(len(paths))
 
 if __name__=='__main__':
     config_file = sys.argv[1]

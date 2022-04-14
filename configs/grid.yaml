@@ -1,6 +1,6 @@
 # graph
 type: 'grid'
-dim: [4, 4]
+dim: [35, 35]
 
 # comms
 
