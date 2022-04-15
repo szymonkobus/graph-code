@@ -17,8 +17,8 @@ class Graph:
 
 # graph loading
 
-def get_graph(conf):
-    match conf.type:
+def get_graph(conf) -> Graph:
+    match conf.graph_type:
         case 'grid':
             return create_grid(conf.dim)
         case x:
