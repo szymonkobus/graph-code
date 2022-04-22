@@ -6,6 +6,7 @@ from torch import Tensor
 
 from graph import Graph
 
+
 Paths = list[list[int]]
 
 
@@ -16,13 +17,15 @@ def lossless_code_NP(graph: Graph, start: int) -> Paths:
     _, paths = set_cover(paths, len(graph))
     return paths
 
+
 def lossless_code(graph: Graph, start: int) -> Paths:
     #   n-out    n-in   source  sink 
     # [0,N-1], [N,2N-1], [2N], [2N+1] 
     graph_dag = path_dag(graph, start)
     N = len(graph)
-    source, sink = 2*N, 2*N + 1
-    capacity = torch.zeros((2*N + 2, 2*N + 2), dtype=int)
+    source, sink = 2*N, (2*N + 1)
+
+    capacity = torch.zeros((2*N + 2, 2*N + 2), dtype=torch.int)
     capacity[source,:N] = 1
     capacity[:N,N:2*N] = graph_dag.adj
     capacity[N:2*N,sink] = 1
@@ -36,9 +39,10 @@ def lossless_code(graph: Graph, start: int) -> Paths:
 
     return full_paths
 
+
 def find_unitary_flow(capacity: Tensor, source: int, sink: int):
     M = len(capacity)
-    flow = torch.zeros((M, M), dtype=int)
+    flow = torch.zeros((M, M), dtype=torch.int)
 
     for _ in range(M):
         residual_capacity = capacity - flow
@@ -47,11 +51,12 @@ def find_unitary_flow(capacity: Tensor, source: int, sink: int):
         if len(path) == 0:
             break
 
-        for beg, end in zip(path[:-1],path[1:]):
+        for beg, end in zip(path[:-1], path[1:]):
             flow[beg,end] += 1
             flow[end,beg] -= 1
 
     return flow
+
 
 def find_path(graph: Graph, start: int, end: int) -> list[int]:
     graph_dag = path_dag(graph, start, end)
@@ -63,7 +68,7 @@ def find_path(graph: Graph, start: int, end: int) -> list[int]:
         if node == start:
             return [node for node in reversed(path)]
         node = torch.argmax(graph_dag.adj[:,node]).item()
-        path.append(node)
+        path.append(int(node))
         
     return []
 
@@ -74,14 +79,15 @@ def find_path_dag(dag: Graph, start: int, end: int) -> list[int]:
         if node == start:
             return [node for node in reversed(path)]
         node = torch.argmax(dag.adj[:,node]).item()
-        path.append(node)
+        path.append(int(node))
     return []
+
 
 def path_dag(graph: Graph, start: int, end: int=-1) -> Graph | None:
     N = len(graph)
-    adj_dag = torch.zeros((N, N), dtype=int)
-    visited = torch.zeros((N,), dtype=bool)
-    current = torch.zeros((N,), dtype=bool)
+    adj_dag = torch.zeros((N, N), dtype=torch.int)
+    visited = torch.zeros((N,), dtype=torch.bool)
+    current = torch.zeros((N,), dtype=torch.bool)
     current[start] = True
 
     for _ in range(N):
@@ -90,10 +96,11 @@ def path_dag(graph: Graph, start: int, end: int=-1) -> Graph | None:
         current = torch.any(adj_dag * visited.unsqueeze(1), dim=0)
         current &= ~visited
 
-        if torch.all(visited == 1) or (end!=-1 and current[end]):
+        if torch.all(visited == 1) or (end != -1 and current[end]):
             return Graph(adj_dag, graph.node_name)
 
-    return None
+    return None  # TODO instead of returning None, return empty graph
+
 
 def path_cover_from_adj(adj: Tensor) -> Paths:
     beg, end = {}, {}
@@ -122,7 +129,7 @@ def path_cover_from_adj(adj: Tensor) -> Paths:
     
     covered = sum(len(path) for path in paths)
     if covered != len(adj):
-        node_covered = torch.zeros((len(adj),), dtype=bool)
+        node_covered = torch.zeros((len(adj),), dtype=torch.bool)
         for path in paths:
             for n in path:
                 node_covered[n] = True
@@ -133,16 +140,19 @@ def path_cover_from_adj(adj: Tensor) -> Paths:
     
     return paths
 
+
 def edge_iterator(adj: Tensor) -> Generator[tuple[int, int], None, None]:
     for i, edges in enumerate(adj):
         for j, has_flow in enumerate(edges):
             if has_flow == 1:
                 yield i, j
 
+
 def extend_paths(paths: Paths, dag: Graph, start: int) -> Paths:
     full_paths = [find_path_dag(dag, start, path[0])[:-1] + path \
                     for path in paths]
     return full_paths
+
 
 def extend_paths_NP(paths: Paths, dag: Graph, start: int) -> Paths:
     origin_paths: dict[int,list[int]] = {start : []}
@@ -152,6 +162,7 @@ def extend_paths_NP(paths: Paths, dag: Graph, start: int) -> Paths:
 
     full_paths = [origin_paths[path[0]] + path for path in paths]
     return full_paths
+
 
 def dag_paths_rev(graph: Graph, node: int) -> Paths:
     r = [[node]]
@@ -163,9 +174,11 @@ def dag_paths_rev(graph: Graph, node: int) -> Paths:
             r += paths
     return r
 
+
 def dag_covering_paths(graph: Graph, root: int) -> Paths:
     paths = dag_covering_paths_rev(graph, root)
     return [[n for n in reversed(path)] for path in paths]
+
 
 def dag_covering_paths_rev(graph: Graph, node: int) -> Paths:
     r = []
@@ -179,9 +192,10 @@ def dag_covering_paths_rev(graph: Graph, node: int) -> Paths:
         return [[node]]
     return r
 
+
 def set_cover(sets: Paths, N: int) -> tuple[list[int],Paths]:
-    sets_ohe = torch.zeros((len(sets), N), dtype=int)
-    for i,s in enumerate(sets):
+    sets_ohe = torch.zeros((len(sets), N), dtype=torch.long)
+    for i, s in enumerate(sets):
         for ele in s:
             sets_ohe[i][ele] = 1
    
