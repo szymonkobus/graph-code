@@ -6,8 +6,10 @@ class Comm:
         self.n_symbols = n_symbols
         self.period = period
 
+
 def get_comm(conf) -> Comm:
     return Comm(conf.n_symbols, conf.period)
+
 
 def comm_dist_iterator(comm: Comm) -> Generator[int, None, None]:
     yield 0

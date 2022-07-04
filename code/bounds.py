@@ -1,21 +1,22 @@
 import torch
 from torch import Tensor
 
-from comm import Comm, comm_dist_iterator
 from graph import Graph
+from comm import Comm, comm_dist_iterator
 
 
 def distance_bound(graph: Graph, start: int) -> float:
     distances = node_distance(graph, start)
     return torch.sum(distances).item() / len(graph)
 
+
 def node_distance(graph: Graph, start: int) -> Tensor:
     N = len(graph)
-    visited = torch.zeros((N,), dtype=bool)
-    current = torch.zeros((N,), dtype=bool)
+    visited = torch.zeros((N,), dtype=torch.bool)
+    current = torch.zeros((N,), dtype=torch.bool)
     current[start] = True
 
-    distance = torch.empty((N,), dtype=int)
+    distance = torch.empty((N,), dtype=torch.int)
     distance[:] = -1
 
     for i in range(N):
@@ -28,11 +29,13 @@ def node_distance(graph: Graph, start: int) -> Tensor:
 
     return distance
 
+
 def comm_bound(comm: Comm, n_nodes: int) -> float:
     cum_dist = 0
     for _, dist in zip(range(n_nodes), comm_dist_iterator(comm)):
         cum_dist += dist
     return cum_dist / n_nodes
+
 
 def dist_comm_bound(graph: Graph, start: int, comm: Comm) -> float:
     distance = node_distance(graph, start)
@@ -41,4 +44,3 @@ def dist_comm_bound(graph: Graph, start: int, comm: Comm) -> float:
             zip(range(len(graph)), comm_dist_iterator(comm))])
     max_distance = torch.maximum(sorted_distance, comm_distance)
     return torch.sum(max_distance).item() / len(graph)
-    
