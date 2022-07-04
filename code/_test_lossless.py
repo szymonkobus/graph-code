@@ -2,10 +2,11 @@ import unittest
 
 import torch
 
-from graph import create_grid
-from lossless import (dag_paths_rev, edge_iterator, find_path,
+from graph import Graph, create_grid
+from lossless import (all_reachable, dag_paths_rev, edge_iterator, find_path,
                       find_unitary_flow, lossless_code, lossless_code_NP,
-                      path_cover_from_adj, path_dag, set_cover)
+                      path_cover_from_adj, path_dag, set_cover,
+                      transitive_closure_dag)
 
 
 class LosslessTest(unittest.TestCase):
@@ -15,10 +16,10 @@ class LosslessTest(unittest.TestCase):
         graph_dag = path_dag(graph, 1)
 
         exp_adj = torch.zeros((5, 5), dtype=int)
-        exp_adj[1][0] = 1   # 1 step
-        exp_adj[1][2] = 1   # 1 step
-        exp_adj[2][3] = 1   # 2 steps
-        exp_adj[3][4] = 1   # 3 steps
+        exp_adj[1,0] = 1   # 1 step
+        exp_adj[1,2] = 1   # 1 step
+        exp_adj[2,3] = 1   # 2 steps
+        exp_adj[3,4] = 1   # 3 steps
 
         self.assertTrue(torch.all(graph_dag.adj==exp_adj))
 
@@ -27,47 +28,47 @@ class LosslessTest(unittest.TestCase):
         graph_dag = path_dag(grid, 1)
 
         exp_adj = torch.zeros((6, 6), dtype=int)
-        exp_adj[1][0] = 1   # 1 step
-        exp_adj[1][4] = 1   # 1 step
-        exp_adj[1][2] = 1   # 1 steps
-        exp_adj[0][3] = 1   # 2 steps
-        exp_adj[4][3] = 1   # 2 steps
-        exp_adj[2][5] = 1   # 2 steps
-        exp_adj[4][5] = 1   # 2 steps
+        exp_adj[1,0] = 1   # 1 step
+        exp_adj[1,4] = 1   # 1 step
+        exp_adj[1,2] = 1   # 1 steps
+        exp_adj[0,3] = 1   # 2 steps
+        exp_adj[4,3] = 1   # 2 steps
+        exp_adj[2,5] = 1   # 2 steps
+        exp_adj[4,5] = 1   # 2 steps
 
         self.assertTrue(torch.all(graph_dag.adj==exp_adj))
         
     def test_dag_2D_2(self):
         graph = create_grid([3, 2])
-        graph.adj[1][3] = 1
-        graph.adj[3][1] = 1
+        graph.adj[1,3] = 1
+        graph.adj[3,1] = 1
 
         graph_dag = path_dag(graph, 0)
 
         exp_adj = torch.zeros((6, 6), dtype=int)
-        exp_adj[0][1] = 1   # 1 step
-        exp_adj[0][3] = 1   # 1 step
-        exp_adj[1][2] = 1   # 2 steps
-        exp_adj[1][4] = 1   # 2 steps
-        exp_adj[3][4] = 1   # 2 steps
-        exp_adj[2][5] = 1   # 3 steps
-        exp_adj[4][5] = 1   # 3 steps
+        exp_adj[0,1] = 1   # 1 step
+        exp_adj[0,3] = 1   # 1 step
+        exp_adj[1,2] = 1   # 2 steps
+        exp_adj[1,4] = 1   # 2 steps
+        exp_adj[3,4] = 1   # 2 steps
+        exp_adj[2,5] = 1   # 3 steps
+        exp_adj[4,5] = 1   # 3 steps
 
         self.assertTrue(torch.all(graph_dag.adj==exp_adj))
     
     def test_dag_2D_end(self):
         graph = create_grid([3, 2])
-        graph.adj[1][3] = 1
-        graph.adj[3][1] = 1
+        graph.adj[1,3] = 1
+        graph.adj[3,1] = 1
 
         graph_dag = path_dag(graph, 0, 4)
 
         exp_adj = torch.zeros((6, 6), dtype=int)
-        exp_adj[0][1] = 1   # 1 step
-        exp_adj[0][3] = 1   # 1 step
-        exp_adj[1][2] = 1   # 2 steps
-        exp_adj[1][4] = 1   # 2 steps
-        exp_adj[3][4] = 1   # 2 steps
+        exp_adj[0,1] = 1   # 1 step
+        exp_adj[0,3] = 1   # 1 step
+        exp_adj[1,2] = 1   # 2 steps
+        exp_adj[1,4] = 1   # 2 steps
+        exp_adj[3,4] = 1   # 2 steps
 
         self.assertTrue(torch.all(graph_dag.adj==exp_adj))
         
@@ -124,26 +125,26 @@ class LosslessTest(unittest.TestCase):
         for node, exp_node in zip(path, exp_path):
             self.assertTrue(node==exp_node)\
 
-    def test_find_path_disconnected(self):
+    def test_find_root_path_disconnected(self):
         graph = create_grid([5])
-        graph.adj[2][3]=0
+        graph.adj[2,3]=0
         path = find_path(graph, 0, 4)
         self.assertTrue(len(path)==0)
 
     def test_flow(self):
         capacity = torch.zeros((7,7), dtype=int)
-        capacity[0][2] = 1
-        capacity[0][3] = 1
-        capacity[2][4] = 1
-        capacity[3][4] = 1
-        capacity[3][5] = 1
-        capacity[4][1] = 1
-        capacity[5][1] = 1
-        capacity[6][1] = 1
+        capacity[0,2] = 1
+        capacity[0,3] = 1
+        capacity[2,4] = 1
+        capacity[3,4] = 1
+        capacity[3,5] = 1
+        capacity[4,1] = 1
+        capacity[5,1] = 1
+        capacity[6,1] = 1
 
         exp_flow = capacity.clone()
-        exp_flow[3][4] = 0
-        exp_flow[6][1] = 0
+        exp_flow[3,4] = 0
+        exp_flow[6,1] = 0
         exp_flow -= exp_flow.clone().T
 
         flow = find_unitary_flow(capacity, 0, 1)
@@ -152,10 +153,10 @@ class LosslessTest(unittest.TestCase):
 
     def test_flow_2(self):
         capacity = torch.zeros((10,10), dtype=int)
-        capacity[0][5] = 1
-        capacity[0][6] = 1
-        capacity[1][7] = 1
-        capacity[2][7] = 1
+        capacity[0,5] = 1
+        capacity[0,6] = 1
+        capacity[1,7] = 1
+        capacity[2,7] = 1
         capacity[8,0:4] = 1
         capacity[4:8,9] = 1
 
@@ -165,8 +166,8 @@ class LosslessTest(unittest.TestCase):
         paths = [[8, 0, 5, 9], [8, 1, 7, 9]]
         for path in paths:
             for a, b in zip(path[:-1], path[1:]):
-                exp_flow[a][b] = 1
-                exp_flow[b][a] = -1
+                exp_flow[a,b] = 1
+                exp_flow[b,a] = -1
 
         self.assertTrue(torch.all(flow==exp_flow))
 
@@ -174,8 +175,8 @@ class LosslessTest(unittest.TestCase):
         adj = torch.zeros((10, 10), dtype=int)
         edges = [(1,2), (3,2), (4,8), (6,1), (6,9), (8,0)]
         for i, j in edges:
-            adj[i][j] = 1
-        adj[3][3] = -1
+            adj[i,j] = 1
+        adj[3,3] = -1
 
         for (i, j), (i_exp, j_exp) in zip(edge_iterator(adj), edges):
             self.assertTrue(i == i_exp)
@@ -183,8 +184,8 @@ class LosslessTest(unittest.TestCase):
 
     def test_path_cover_from_adj(self):
         adj = torch.zeros((4,4), dtype=int)
-        adj[0][1] = 1
-        adj[1][3] = 1
+        adj[0,1] = 1
+        adj[1,3] = 1
 
         paths = path_cover_from_adj(adj)
 
@@ -211,4 +212,63 @@ class LosslessTest(unittest.TestCase):
         graph = create_grid([4, 4])
         paths = lossless_code(graph, 5)
         self.assertTrue(len(paths)==6)
-  
+    
+    def test_lossless_code_3(self):
+        adj = torch.zeros((8, 8), dtype=int)
+        edges = [(0,1), (0,2), (0,3), (1,4), (2,4), (3,4), (4,5), (4,6), (4,7)]
+        for i, j in edges:
+            adj[i,j] = 1
+        graph = Graph(adj)
+
+        paths = lossless_code(graph, 0)
+        self.assertTrue(len(paths)==3)
+
+        for path in paths:
+            for a, b in zip(path[:-1], path[1:]):
+                self.assertTrue(graph.adj[a,b]==1)
+
+    def test_all_reachable(self):
+        adj = torch.zeros((7, 7), dtype=int)
+        edges = [(0,1), (1,2), (2,3), (2,4), (4,5), (0,6), (6,4)]
+        for i, j in edges:
+            adj[i,j] = 1
+        graph = Graph(adj)
+
+        mem = [None] * len(graph)
+        reach, mem = all_reachable(graph, 0, mem)
+
+        exp_reach = torch.tensor([0, 1, 1, 1, 1, 1, 1], dtype=int)
+        self.assertTrue(torch.all(reach==exp_reach))
+
+        self.assertTrue(len(mem)==7)
+        exp_mem = [
+            [0, 1, 1, 1, 1, 1, 1],
+            [0, 0, 1, 1, 1, 1, 0],
+            [0, 0, 0, 1, 1, 1, 0],
+            [0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 1, 0],
+            [0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 1, 1, 0],
+        ]
+        for m, exp_m in zip(mem, exp_mem):
+            self.assertTrue(torch.all(m==torch.tensor(exp_m, dtype=int)))
+
+    def test_transitive_closure_dag(self):
+        adj = torch.zeros((7, 7), dtype=int)
+        edges = [(0,1), (1,2), (2,3), (2,4), (4,5), (0,6), (6,4)]
+        for i, j in edges:
+            adj[i,j] = 1
+        graph = Graph(adj)
+
+        res = transitive_closure_dag(graph)
+
+        exp_adj = torch.Tensor([
+            [0, 1, 1, 1, 1, 1, 1],
+            [0, 0, 1, 1, 1, 1, 0],
+            [0, 0, 0, 1, 1, 1, 0],
+            [0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 1, 0],
+            [0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 1, 1, 0],
+        ])
+        self.assertTrue(torch.all(res.adj==exp_adj))

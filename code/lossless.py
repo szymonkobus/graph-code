@@ -1,5 +1,6 @@
 from collections import deque
-from typing import Generator
+from itertools import chain
+from typing import Generator, Optional
 
 import torch
 from torch import Tensor
@@ -10,8 +11,8 @@ Paths = list[list[int]]
 
 
 def lossless_code_NP(graph: Graph, start: int) -> Paths:
-    graph_dag = path_dag(graph, start)
-    paths = dag_covering_paths(graph_dag, start)
+    dag = path_dag(graph, start)
+    paths = dag_covering_paths(dag, start)
     assert len(paths) < 25
     _, paths = set_cover(paths, len(graph))
     return paths
@@ -19,12 +20,13 @@ def lossless_code_NP(graph: Graph, start: int) -> Paths:
 def lossless_code(graph: Graph, start: int) -> Paths:
     #   n-out    n-in   source  sink 
     # [0,N-1], [N,2N-1], [2N], [2N+1] 
-    graph_dag = path_dag(graph, start)
+    dag = path_dag(graph, start)
+    dag_tc = transitive_closure_dag(dag)
     N = len(graph)
     source, sink = 2*N, 2*N + 1
-    capacity = torch.zeros((2*N + 2, 2*N + 2), dtype=int)
+    capacity = torch.zeros((2*N + 2, 2*N + 2), dtype=torch.int)
     capacity[source,:N] = 1
-    capacity[:N,N:2*N] = graph_dag.adj
+    capacity[:N,N:2*N] = dag_tc.adj
     capacity[N:2*N,sink] = 1
 
     flow = find_unitary_flow(capacity, source, sink)
@@ -32,13 +34,14 @@ def lossless_code(graph: Graph, start: int) -> Paths:
     path_adj = flow[:N,N:2*N]
     paths = path_cover_from_adj(path_adj)
 
-    full_paths = extend_paths(paths, graph_dag, start)
+    full_paths = patch_paths(paths, dag)
+    origin_paths = extend_paths_to_origin(full_paths, dag, start)
 
-    return full_paths
+    return origin_paths
 
 def find_unitary_flow(capacity: Tensor, source: int, sink: int):
     M = len(capacity)
-    flow = torch.zeros((M, M), dtype=int)
+    flow = torch.zeros((M, M), dtype=torch.int)
 
     for _ in range(M):
         residual_capacity = capacity - flow
@@ -62,26 +65,26 @@ def find_path(graph: Graph, start: int, end: int) -> list[int]:
     for _ in range(len(graph)):
         if node == start:
             return [node for node in reversed(path)]
-        node = torch.argmax(graph_dag.adj[:,node]).item()
+        node = torch.argmax(graph_dag.adj[:,node]).item() # type: ignore
         path.append(node)
         
     return []
 
-def find_path_dag(dag: Graph, start: int, end: int) -> list[int]:
+def find_root_path_dag(dag: Graph, start: int, end: int) -> list[int]:
     path = [end]
     node = end
     for _ in range(len(dag)):
         if node == start:
             return [node for node in reversed(path)]
-        node = torch.argmax(dag.adj[:,node]).item()
+        node = torch.argmax(dag.adj[:,node]).item() # type: ignore
         path.append(node)
     return []
 
 def path_dag(graph: Graph, start: int, end: int=-1) -> Graph | None:
     N = len(graph)
-    adj_dag = torch.zeros((N, N), dtype=int)
-    visited = torch.zeros((N,), dtype=bool)
-    current = torch.zeros((N,), dtype=bool)
+    adj_dag = torch.zeros((N, N), dtype=torch.int)
+    visited = torch.zeros((N,), dtype=torch.bool)
+    current = torch.zeros((N,), dtype=torch.bool)
     current[start] = True
 
     for _ in range(N):
@@ -122,7 +125,7 @@ def path_cover_from_adj(adj: Tensor) -> Paths:
     
     covered = sum(len(path) for path in paths)
     if covered != len(adj):
-        node_covered = torch.zeros((len(adj),), dtype=bool)
+        node_covered = torch.zeros((len(adj),), dtype=torch.bool)
         for path in paths:
             for n in path:
                 node_covered[n] = True
@@ -135,16 +138,63 @@ def path_cover_from_adj(adj: Tensor) -> Paths:
 
 def edge_iterator(adj: Tensor) -> Generator[tuple[int, int], None, None]:
     for i, edges in enumerate(adj):
-        for j, has_flow in enumerate(edges):
-            if has_flow == 1:
+        for j, connected in enumerate(edges):
+            if connected == 1:
                 yield i, j
 
-def extend_paths(paths: Paths, dag: Graph, start: int) -> Paths:
-    full_paths = [find_path_dag(dag, start, path[0])[:-1] + path \
+def transitive_closure_dag(graph: Graph) -> Graph:
+    adj = torch.zeros((len(graph), len(graph)), dtype=torch.int)
+    mem = [None]*len(graph)
+    for node in range(len(graph)):
+        adj_node, mem = all_reachable(graph, node, mem)
+        adj[node] = adj_node
+
+    return Graph(adj)
+
+def all_reachable(graph: Graph, node: int, mem: list[Optional[Tensor]]) -> \
+        tuple[Tensor, list[Tensor]]: 
+    if mem[node] is not None:
+        return mem[node], mem
+    
+    children = graph.adj[node]
+    adj = torch.clone(children)
+    child_iter, = torch.nonzero(children, as_tuple=True)
+    
+    for child in child_iter:
+        child_adj, mem = all_reachable(graph, child, mem) # type: ignore
+        torch.logical_or(adj, child_adj, out=adj)
+    
+    mem[node] = adj
+    return adj, mem
+
+def patch_paths(paths: Paths, dag: Graph) -> Paths:
+    full_paths = []
+    for i, path in enumerate(paths):
+        segments: list[list[int]] = []
+        cut = 0
+        for j, (node, next_node) in enumerate(zip(path[:-1], path[1:])):
+            if dag.adj[node, next_node]!=1:
+                cut = j + 1
+                segments.append(path[:cut])
+                # applies dag to dag to find the path
+                segments.append(find_path(dag, node, next_node)[1:-1])
+            if cut != 0:
+                segments.append(path[cut:])
+        
+        if len(segments) == 0:
+            full_paths.append(path)
+        else:
+            full_path = list(chain.from_iterable(segments))
+            full_paths.append(full_path)
+    
+    return full_paths
+
+def extend_paths_to_origin(paths: Paths, dag: Graph, start: int) -> Paths:
+    full_paths = [find_root_path_dag(dag, start, path[0])[:-1] + path \
                     for path in paths]
     return full_paths
 
-def extend_paths_NP(paths: Paths, dag: Graph, start: int) -> Paths:
+def extend_paths_to_origin_NP(paths: Paths, dag: Graph, start: int) -> Paths:
     origin_paths: dict[int,list[int]] = {start : []}
     for path in dag_covering_paths(dag, start):
         for i, node in enumerate(path):
