@@ -32,21 +32,56 @@ class BoundsTest(unittest.TestCase):
         exp_distance = torch.tensor([0,1,2,-1,-1])
         self.assertTrue(torch.all(distance == exp_distance))
 
-    def test_distance_bound(self):
+    def test_distance_bound_unifrom(self):
         graph = create_grid([3, 3])
-        bound = distance_bound(graph, 0)
+        prob = torch.Tensor([1/9]).expand(9)
+        bound = distance_bound(graph, 0, prob)
         exp_bound = 2
         self.assertTrue(bound == exp_bound)
+
+    def test_distance_bound(self):
+        graph = create_grid([3, 3])
+        prob = torch.Tensor([0]*6 + [1/3]*3)
+        bound = distance_bound(graph, 0, prob)
+        exp_bound = 3
+        self.assertTrue(bound == exp_bound)
     
+    def test_communication_bound_unifrom(self):
+        comm = Comm(2, 1)
+        prob = torch.Tensor([1/9]).expand(9)
+        bound = comm_bound(comm, prob)
+        exp_bound = sum([0, 1, 1, 2, 2, 2, 2, 3, 3]) / 9
+        self.assertTrue(abs(bound-exp_bound) < 1e-6)
+
     def test_communication_bound(self):
         comm = Comm(2, 1)
-        bound = comm_bound(comm, 9)
-        exp_bound = sum([0, 1, 1, 2, 2, 2, 2, 3, 3]) / 9
+        prob = torch.Tensor([0, 2/3, 1/6, 1/6] + [0]*5)
+        bound = comm_bound(comm, prob)
+        exp_bound = 1/3
+        self.assertTrue(abs(bound-exp_bound) < 1e-6)
+
+    def test_distance_communication_bound_uniform(self):
+        graph = create_grid([4, 4])
+        comm = Comm(3, 1)
+        prob = torch.Tensor([1/16]).expand(16)
+        bound = dist_comm_bound(graph, 5, comm, prob)
+        exp_bound = sum([0, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4])/16
         self.assertTrue(bound == exp_bound)
 
     def test_distance_communication_bound(self):
         graph = create_grid([4, 4])
         comm = Comm(3, 1)
-        bound = dist_comm_bound(graph, 5, comm)
-        exp_bound = sum([0, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4]) / 16
+        prob = torch.Tensor([1/16]*16)
+        prob[1] -= 1/32
+        prob[4] += 1/32
+        bound = dist_comm_bound(graph, 5, comm, prob)
+        exp_bound = sum([0, 1.5, 1, 1, 2, 2, 2, 2, 2, 2, 1, 3, 3, 3, 3, 4])/16
+        self.assertTrue(bound == exp_bound)
+
+    def test_distance_communication_bound_2(self):
+        graph = create_grid([4, 4])
+        comm = Comm(3, 2)
+        prob = torch.Tensor([1/16]).expand(16)
+        bound = dist_comm_bound(graph, 5, comm, prob)
+        exp_bound = sum([0, 3*1, 3*2, 8*3, 1*4])/16
         self.assertTrue(bound == exp_bound)

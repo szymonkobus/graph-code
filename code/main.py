@@ -1,14 +1,15 @@
-import sys
 import argparse
+import sys
 
-import yaml
-import torch
 import numpy as np
+import torch
+import yaml
 
+from bounds import (comm_bound, dist_comm_bound, dist_comm_bound_uniform,
+                    distance_bound)
 from comm import get_comm
-from lossless import lossless_code
 from graph import create_grid, get_graph
-from bounds import comm_bound, dist_comm_bound, distance_bound
+from lossless import lossless_code
 
 
 def run(graph, start, comm):
@@ -17,13 +18,15 @@ def run(graph, start, comm):
     # paths = lossless_code(graph, 20)
     # print(paths)
     # print(len(paths))
-
-    L_d = distance_bound(graph, start)
+    prob = torch.tensor([1/len(graph)]).expand(len(graph))
+    L_d = distance_bound(graph, start, prob)
     print('distance bound      = {}'.format(L_d))
-    L_c = comm_bound(comm, len(graph))
+    L_c = comm_bound(comm, prob)
     print('comm bound          = {}'.format(L_c))
-    L_cd = dist_comm_bound(graph, start, comm)
+    L_cd = dist_comm_bound(graph, start, comm, prob)
     print('comm distance bound = {}'.format(L_cd))
+    L_cd_u = dist_comm_bound_uniform(graph, start, comm)
+    print('comm distance bound unifrom = {}'.format(L_cd_u))
 
 
 if __name__ == '__main__':

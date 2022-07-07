@@ -70,9 +70,9 @@ def find_path(graph: Graph, start: int, end: int) -> list[int]:
         if node == start:
             return [node for node in reversed(path)]
         node = torch.argmax(graph_dag.adj[:,node]).item() # type: ignore
-        path.append(node)
-        
+        path.append(node)   
     return []
+
 
 def find_root_path_dag(dag: Graph, start: int, end: int) -> list[int]:
     path = [end]
@@ -148,6 +148,7 @@ def edge_iterator(adj: Tensor) -> Generator[tuple[int, int], None, None]:
         for j, connected in enumerate(edges):
             if connected == 1:
                 yield i, j
+
 
 def transitive_closure_dag(graph: Graph) -> Graph:
     adj = torch.zeros((len(graph), len(graph)), dtype=torch.int)
