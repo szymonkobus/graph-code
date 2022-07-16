@@ -35,28 +35,22 @@ def lossless_code(graph: Graph, start: int) -> Paths:
 
     path_adj = flow[:N,N:2*N]
     paths = path_cover_from_adj(path_adj)
-
     full_paths = patch_paths(paths, dag)
     origin_paths = extend_paths_to_origin(full_paths, dag, start)
-
     return origin_paths
 
 
 def find_unitary_flow(capacity: Tensor, source: int, sink: int):
     M = len(capacity)
     flow = torch.zeros((M, M), dtype=torch.int)
-
     for _ in range(M):
         residual_capacity = capacity - flow
         path = find_path(Graph(residual_capacity), source, sink)
-
         if len(path) == 0:
             break
-
         for beg, end in zip(path[:-1], path[1:]):
             flow[beg,end] += 1
             flow[end,beg] -= 1
-
     return flow
 
 
@@ -85,7 +79,7 @@ def find_root_path_dag(dag: Graph, start: int, end: int) -> list[int]:
     return []
 
 
-def path_dag(graph: Graph, start: int, end: int=-1) -> Graph | None:
+def path_dag(graph: Graph, start: int, end: int = -1) -> Graph | None:
     N = len(graph)
     adj_dag = torch.zeros((N, N), dtype=torch.int)
     visited = torch.zeros((N,), dtype=torch.bool)
@@ -97,16 +91,13 @@ def path_dag(graph: Graph, start: int, end: int=-1) -> Graph | None:
         adj_dag += graph.adj * current.unsqueeze(1) * ~visited.unsqueeze(0)
         current = torch.any(adj_dag * visited.unsqueeze(1), dim=0)
         current &= ~visited
-
         if torch.all(visited == 1) or (end != -1 and current[end]):
             return Graph(adj_dag, graph.node_name)
-
     return None
 
 
 def path_cover_from_adj(adj: Tensor) -> Paths:
     beg, end = {}, {}
-
     for i, j in edge_iterator(adj):
         match (i in end, j in beg):
             case False, False:
@@ -128,18 +119,15 @@ def path_cover_from_adj(adj: Tensor) -> Paths:
                 end[left_path[-1]] = left_path
 
     paths = [list(path) for path in beg.values()]
-    
     covered = sum(len(path) for path in paths)
     if covered != len(adj):
         node_covered = torch.zeros((len(adj),), dtype=torch.bool)
         for path in paths:
             for n in path:
                 node_covered[n] = True
-        
         for i, n in enumerate(node_covered):
             if not n:
                 paths.append([i])
-    
     return paths
 
 
@@ -156,7 +144,6 @@ def transitive_closure_dag(graph: Graph) -> Graph:
     for node in range(len(graph)):
         adj_node, mem = all_reachable(graph, node, mem)
         adj[node] = adj_node
-
     return Graph(adj)
 
 
@@ -196,7 +183,6 @@ def patch_paths(paths: Paths, dag: Graph) -> Paths:
         else:
             full_path = list(chain.from_iterable(segments))
             full_paths.append(full_path)
-    
     return full_paths
 
 
@@ -257,16 +243,13 @@ def set_cover(sets: Paths, N: int) -> tuple[list[int],Paths]:
     
     is_cover = torch.all(torch.einsum('bi,sb->si',sets_ohe, subsets)!=0, dim=1)
     count = torch.sum(subsets, dim=1)
-    
     idx, min_count = -1, N
     for i, (covers, cnt) in enumerate(zip(is_cover, count)):
         if covers and cnt < min_count:
             idx = i
             min_count = cnt
-
     if idx == -1:
         return [], []
-        
     res_subset = subsets[idx]
     cover = []
     set_cover = []
@@ -274,5 +257,4 @@ def set_cover(sets: Paths, N: int) -> tuple[list[int],Paths]:
         if covers:
             cover.append(i)
             set_cover.append(sets[i])
-
     return cover, set_cover
