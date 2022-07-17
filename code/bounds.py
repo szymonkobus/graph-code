@@ -46,22 +46,18 @@ def dist_comm_bound(graph: Graph, start: int, comm: Comm, prob: Tensor) \
     depths = [[j.item() for j in (distance==i).nonzero(as_tuple=True)[0]]
         for i in range(max_distance+1)]
     curr: list[int] = []
-
     while len(curr) != 0 or depth <= max_distance:
         if depth < len(depths):
             curr += depths[depth]
-
         if len(curr) <= width:
             assigned, curr = curr, []
         else:
             curr = sorted(curr, key=lambda i : prob[i], reverse=True)
             assigned, curr = curr[:width], curr[width:]
-        
         p = sum([prob[i] for i in assigned], torch.zeros((1,))).item()
         bound += depth * p
         width *= comm[depth]
         depth += 1
-
     return bound
 
 
