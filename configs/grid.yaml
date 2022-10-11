@@ -1,10 +1,16 @@
 # graph
 graph_type: 'grid'
-dim: [50, 50]
-start: 1025
+dim: [10, 10, 10]
+start: 10
+
+# goal distribution
+prob: 'uniform'
+
+# path assign
+path_prob: 'first'
 
 # comms
 n_symbols: 2
-period: 3
+period: 1
 
 # algorithm
