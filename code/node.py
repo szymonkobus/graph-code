@@ -5,7 +5,7 @@ class TNode:
     def __init__(self, 
                 idx: int, 
                 parent: TNode | None = None, 
-                children: list[TNode] | None = None, 
+                children: list[TNode] | None = None,
                 name: str = ''):
         self.idx = idx
         self.parent = parent

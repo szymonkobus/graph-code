@@ -1,12 +1,26 @@
 import unittest
 
+import torch
+
+from graph import Graph
+from lossy import (assign_path_prob, contract_junctions, distance_bound_paths,
+                   expand_junctions, expected_depth, first_paths_prob, huffman,
+                   junction_code, junction_code_graph, least_depths, node_code,
+                   paths_to_tree, static_path_code_perf)
 from node import TNode
-from lossy import (huffman, node_code, paths_to_tree, first_paths_prob,
-                   least_depths, expected_depth, static_path_code_perf,
-                   distance_bound_paths)
 
 
 class LossyTest(unittest.TestCase):
+    def rec_idx_check(self, tree, idxs):
+        if type(idxs)==int:
+           self.assertTrue(tree.idx==idxs)
+        else:
+            idx, children_idxs = idxs
+            self.assertTrue(tree.idx==idx)
+            self.assertTrue(len(tree.children)==len(children_idxs))
+            for child, child_idxs in zip(tree.children, children_idxs):
+                self.rec_idx_check(child, child_idxs)
+
     def test_node_code_bin(self):
         probs = [0.0, 0.5, 0.2, 0.3]
         res = node_code(probs, 0)
@@ -176,13 +190,143 @@ class LossyTest(unittest.TestCase):
         res = first_paths_prob(paths, 6, [])
         exp_res = [0, 0, 0, 0, 1, 1]
         self.assertTrue(all([a==b for a,b in zip(res, exp_res)]))
+
+    def test_assign_prob(self):
+        numbered_paths = [(0, [0, 1, 2]), (1, [0, 3])]
+        v0 = paths_to_tree([path for _, path in numbered_paths])
+        v1 = v0.children[0]
+        v2 = v1.children[0]
+        v3 = v0.children[1]
+        prob = [0.2, 0.3, 0.1, 0.4]
+        node_paths = [0, 0, 0, 1]
+        assign_path_prob(numbered_paths, v0, prob, node_paths)
+        self.assertEqual(v0.p, 1.)
+        self.assertEqual(v1.p, 0.4)
+        self.assertEqual(v2.p, 0.1)
+        self.assertEqual(v3.p, 0.4)
+        self.assertListEqual(v0.paths, [0, 1])
+        self.assertListEqual(v1.paths, [0])        
+        self.assertListEqual(v2.paths, [0])        
+        self.assertListEqual(v3.paths, [1])
+    
+    def make_node(self, idx, parent, p, paths):
+        node = TNode(idx, parent=parent)
+        node.p = p
+        node.paths = paths
+        return node
+
+    def test_code_junction(self):
+        v0 = self.make_node(0, None, 1., [0,1,2,3,4])
+        v1 = self.make_node(1, v0, 1/4, [0,1,2])
+        v2 = self.make_node(2, v0, 1/4, [3])
+        v3 = self.make_node(3, v0, 1/2, [4])
+        v4 = self.make_node(4, v1, 1/4, [0,1,2])
+        v5 = self.make_node(5, v4, 1/8, [0])
+        v6 = self.make_node(6, v4, 1/16, [1])
+        v3_b = self.make_node(3, v4, 0., [2])
+        v7 = self.make_node(7, v3_b, 0., [2])
+
+        tree = expand_junctions(v0, degree=2)
+
+        exp_idxs = \
+        (0, [
+            (0, [
+                (1, [
+                    (4, [5,
+                        (4, [
+                            6, (3, [7])
+                        ])
+                    ])
+                ]), 2
+            ]), 3
+        ])
+        self.rec_idx_check(tree, exp_idxs)
+        self.assertListEqual(tree.paths, [0,1,2,3,4])
+        t0b, t3 = tree.children
+        self.assertListEqual(t0b.paths, [0,1,2,3])
+        self.assertListEqual(t3.paths, [4])
+        t1, t2 = t0b.children
+        self.assertListEqual(t1.paths, [0,1,2])
+        self.assertListEqual(t2.paths, [3])
+        t4, = t1.children
+        self.assertListEqual(t4.paths, [0,1,2])
+        t5, t4b = t4.children
+        self.assertEqual(t5.paths, [0])
+        self.assertEqual(t4b.paths, [1,2])
+        t6, t3b = t4b.children
+        self.assertEqual(t6.paths, [1])
+        self.assertEqual(t3b.paths, [2])
+        t7, = t3b.children
+        self.assertListEqual(t7.paths, [2])
+
+    def test_contract_junctions_1(self):
+        paths = [[0,1,2],[0,1,3]]
+        v0 = self.make_node(0, None, 0, [0,1])
+        v1 = self.make_node(1, v0, 0, [0,1])
+        v2 = self.make_node(2, v1, 0, [0])
+        v3 = self.make_node(3, v1, 0, [1])
+        tree = contract_junctions(v0, paths, 2)
+        exp_idxs = (0, [(1, [2]), (1, [3])])
+        self.rec_idx_check(tree, exp_idxs)
+    
+    def test_contract_junctions_2(self):
+        v0 = self.make_node(0, None, 1., [0,1,2,3,4])
+        v1 = self.make_node(1, v0, 1/4, [0,1,2])
+        v2 = self.make_node(2, v0, 1/4, [3])
+        v3 = self.make_node(3, v0, 1/2, [4])
+        v4 = self.make_node(4, v1, 1/4, [0,1,2])
+        v5 = self.make_node(5, v4, 1/8, [0])
+        v6 = self.make_node(6, v4, 1/16, [1])
+        v3_b = self.make_node(3, v4, 0., [2])
+        v7 = self.make_node(7, v3_b, 0., [2])
+        root = expand_junctions(v0, degree=2)
         
-    def rec_idx_check(self, tree, idxs):
-        if type(idxs)==int:
-           self.assertTrue(tree.idx==idxs)
-        else:
-            idx, children_idxs = idxs
-            self.assertTrue(tree.idx==idx)
-            self.assertTrue(len(tree.children)==len(children_idxs))
-            for child, child_idxs in zip(tree.children, children_idxs):
-                self.rec_idx_check(child, child_idxs)
+        paths = [[0,1,4,5],[0,1,4,6],[0,1,4,3,7],[0,2],[0,3]]
+        tree = contract_junctions(root, paths, 2)
+
+        exp_idxs = \
+        (0, [
+            (0, [
+                (1, [
+                    (4, [5]),
+                    (4, [6, (3, [7])])
+                ]), 2
+            ]), 3
+        ])
+        self.rec_idx_check(tree, exp_idxs)
+
+    def test_junction_code(self):
+        paths = [[0,1,4,5],[0,1,4,6],[0,1,4,3,7],[0,2],[0,3]]
+        prob = [0,0,1/4,1/2,1/16,2/16,1/16,0]
+        node_paths = [0,0,3,4,0,0,1,2]
+        tree = junction_code(paths, prob, node_paths, 2)
+        exp_idxs = \
+        (0, [
+            (0, [
+                (1, [
+                    (4, [5]),
+                    (4, [6, (3, [7])])
+                ]), 2
+            ]), 3
+        ])
+        self.rec_idx_check(tree, exp_idxs)
+
+    def test_junction_code_graph(self):
+        adj = torch.zeros((9,9), dtype=torch.int)
+        edges = [(0,1),(0,2),(0,3),(1,4),(4,5),(4,6),(4,8),(8,7),(8,1),(8,2),
+                 (8,3),(7,5),(7,0),(5,2),(5,6),(6,5),(6,3),(4,1),(0,0),(1,2)]
+        for i,j in edges:
+            adj[i,j] = 1
+        graph = Graph(adj)
+        prob = [0,0,1/4,1/2,1/16,2/16,1/16,0,0]
+        tree = junction_code_graph(graph, 0, prob, first_paths_prob, 2)
+        exp_idxs = \
+        (0, [
+            (0, [
+                (1, [
+                    (4, [5]),
+                    (4, [6, (8, [7])])
+                ]), 2
+            ]), 3
+        ])
+        self.rec_idx_check(tree, exp_idxs)

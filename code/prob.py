@@ -1,4 +1,4 @@
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 
 import torch
 from torch import Tensor
@@ -26,5 +26,4 @@ def get_path_prob(conf: Any) -> \
             return first_paths_prob
         case x:
             raise TypeError('path_prob type \'{}\' not implemented.'.format(x))
-     
      # additonal : 'random', 'iterate', 'optimal'
