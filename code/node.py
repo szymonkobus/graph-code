@@ -15,6 +15,8 @@ class TNode:
             self.link_parent()
         if len(self.children)!=0:
             self.link_children()
+        self.p = 0.
+        self.paths = []
       
     def link_parent(self) -> None:
         if self.parent is not None:

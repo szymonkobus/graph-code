@@ -4,10 +4,11 @@ import torch
 
 from graph import Graph
 from lossy import (assign_path_prob, contract_junctions, distance_bound_paths,
-                   expand_junctions, expected_depth, first_paths_prob, huffman,
-                   junction_code, junction_code_graph, least_depths, node_code,
-                   paths_to_tree, static_path_code_perf)
+                   expand_junctions, expected_depth, huffman, junction_code,
+                   junction_code_graph, junction_code_perf, least_depths,
+                   node_code, paths_to_tree, static_path_code_perf)
 from node import TNode
+from prob import first_paths_prob
 
 
 class LossyTest(unittest.TestCase):
@@ -109,7 +110,6 @@ class LossyTest(unittest.TestCase):
             (1, [2]),
              3
         ])
-        self.rec_idx_check(res, exp_idxs)
 
     def test_path_to_tree_2(self):
         paths = [[0,1,2], [0,1,3], [0,1,4]]
@@ -184,12 +184,6 @@ class LossyTest(unittest.TestCase):
         avg_distance = distance_bound_paths(paths, node_paths, prob)
         exp_avg_distance = 1.9
         self.assertTrue(abs(avg_distance-exp_avg_distance)<1e-8)
-
-    def test_first_paths_prob(self):
-        paths = [[0,1,2,3], [0,4,2,5]]
-        res = first_paths_prob(paths, 6, [])
-        exp_res = [0, 0, 0, 0, 1, 1]
-        self.assertTrue(all([a==b for a,b in zip(res, exp_res)]))
 
     def test_assign_prob(self):
         numbered_paths = [(0, [0, 1, 2]), (1, [0, 3])]
@@ -310,6 +304,14 @@ class LossyTest(unittest.TestCase):
             ]), 3
         ])
         self.rec_idx_check(tree, exp_idxs)
+
+    def test_junction_code_perf(self):
+        paths = [[0,1,4,5],[0,1,4,6],[0,1,4,3,7],[0,2],[0,3]]
+        prob = [0,0,1/4,1/2,1/16,2/16,1/16,0.01]
+        node_paths = [0,0,3,4,0,0,1,2]
+        avg_perf = junction_code_perf(paths, prob, node_paths, 2)
+        exp_perf = 31/16 + 0.05
+        self.assertEqual(avg_perf, exp_perf)
 
     def test_junction_code_graph(self):
         adj = torch.zeros((9,9), dtype=torch.int)

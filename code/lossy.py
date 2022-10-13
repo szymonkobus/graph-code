@@ -3,6 +3,7 @@ from heapq import heapify, heappop, heappush
 from itertools import chain
 from typing import Callable, Sequence, TypeVar
 
+from bounds import distance_bound
 from graph import Graph
 from lossless import Paths, lossless_code
 from node import TNode
@@ -37,20 +38,29 @@ def huffman(items: list[I], prob: Sequence[float], join: Callable[..., I],
     if degree != 2:
         n_fill = (1-len(items)) % (degree-1)
         fill = [(0., - i-len(items), None) for i in range(n_fill)]
-        heap = fill + heap # type: ignore
+        heap: list[tuple[float, int, I]] = fill + heap   # type: ignore
     heapify(heap)
     while len(heap) >= degree:
         top = [heappop(heap) for _ in range(degree)]
         top_p, top_i, top_item = zip(*top)
-        joined = (sum(top_p), max(top_i), join(list(reversed(top_item))))
+        joined = (sum(top_p), max(top_i),    # type: ignore
+                  join(list(reversed(top_item)))) 
         heappush(heap, joined)
     _, _, item = heap[0]
     return item
 
 
+def node_code_perf(graph: Graph, prob: Sequence[float], start: int, 
+                   degree: int = 2) -> float:
+    tree_code = node_code(prob, start, degree)
+    avg_n_code = expected_depth(tree_code, prob)
+    avg_n_move = distance_bound(graph, start, prob)  # type: ignore
+    return avg_n_move + (avg_n_code - 1)
+
+
 def static_path_code_perf(paths: Paths, prob: Sequence[float], 
                           node_paths: Sequence[int], degree: int = 2) -> float:
-    prob_paths = [0] * (len(paths)+1)
+    prob_paths = [0.] * (len(paths)+1)
     for node, path in enumerate(node_paths):
         prob_paths[path] += prob[node]
     path_tree = node_code(prob_paths, len(paths), degree=degree)
@@ -65,9 +75,6 @@ def paths_to_tree(paths: Paths) -> TNode:
     
 
 def paths_to_tree_rec(paths: Paths, idx: int, depth: int) -> TNode:
-    if len(paths)==1 and len(paths[0])==depth-1:
-        return TNode(paths[0])
-
     groups = defaultdict(list)
     for path in paths:
         if len(path)>depth:
@@ -84,14 +91,14 @@ def expected_depth(tree: TNode, prob: Sequence[float]) -> float:
     return sum([d*p for d,p in zip(depths, prob)])
 
 
-def least_depths(tree: TNode, n: int) -> Sequence[int]:
+def least_depths(tree: TNode, n: int) -> list[int]:
     '''finds min depth for each node idx in the tree'''
-    return least_depth_rec(tree, [None]*n, 0)
+    return least_depth_rec(tree, [None]*n, 0)   # type: ignore
 
 
-def least_depth_rec(tree: TNode, depths: Sequence[int], depth: int) \
-        -> Sequence[int]:
-    if (depths[tree.idx] is None) or (depth < depths[tree.idx]):
+def least_depth_rec(tree: TNode, depths: list[int | None], depth: int) \
+        -> list[int | None]:
+    if (depths[tree.idx] is None) or (depth < depths[tree.idx]):  # type: ignore
         depths[tree.idx] = depth
     for child in tree.children:
         depths = least_depth_rec(child, depths, depth+1)
@@ -121,8 +128,9 @@ def junction_code_graph(
     return code_tree
 
 
-def junction_code(paths: Paths, prob: Sequence[float], node_paths: Sequence[int],
-                  degree: int = 2, tree: TNode | None = None) -> TNode:
+def junction_code(paths: Paths, prob: Sequence[float], 
+                  node_paths: Sequence[int], degree: int = 2, 
+                  tree: TNode | None = None) -> TNode:
     '''creates dynamic path coding tree'''
     if tree is None:
         tree = paths_to_tree(paths)
@@ -132,10 +140,13 @@ def junction_code(paths: Paths, prob: Sequence[float], node_paths: Sequence[int]
     return contract_junctions(tree_wait, paths, degree=degree)
 
 
-def junction_code_perf(tree: TNode, prob: Sequence[float], 
-                       node_paths: Sequence[int], degree: int = 2) -> float:
+def junction_code_perf(paths: Paths, prob: Sequence[float], 
+                       node_paths: Sequence[int], degree: int = 2, 
+                       tree: TNode | None = None) -> float:
     '''calculates expected number of steps for junction coding'''
-    pass
+    tree_junc = junction_code(paths, prob, node_paths, degree, tree)
+    avg_depth = expected_depth(tree_junc, prob)
+    return avg_depth
 
 
 def assign_path_prob(numbered_paths: list[tuple[int, list[int]]], tree: TNode, 
@@ -170,6 +181,8 @@ def expand_junctions(tree: TNode, degree: int = 2) -> TNode:
 
 
 def join_nodes_w_paths(parent_template: TNode, children: list[TNode]) -> TNode:
+    if None in children:
+        children = [child for child in children if child is not None]
     parent = TNode(parent_template.idx, children=children, 
                    name=parent_template.name)
     parent.p = sum([child.p for child in children])
@@ -207,15 +220,3 @@ def contract_junctions(tree: TNode, paths: Paths, degree: int = 2,
     children = [contract_junctions(child, paths, degree, depth)
                     for child in tree.children]
     return TNode(idx, children=children)
-
-
-def first_paths_prob(paths: Paths, n_nodes: int, probs: Sequence[float]) \
-        -> Sequence[int]:
-    '''assigns each vertex to first path it is a part of'''
-    assign = [None for _ in range(n_nodes)]
-    for i, path in enumerate(paths):
-        for node in path:
-            if assign[node] is None:
-                assign[node] = i
-    assert not any([path is None for path in assign])
-    return assign

@@ -1,10 +1,15 @@
 # graph
+# graph_type: 'random'
+# dim: 1000
+# attachment_pow: 1
 graph_type: 'grid'
 dim: [10, 10, 10]
-start: 10
 
-# goal distribution
-prob: 'uniform'
+start: 'uniform'
+
+# goal distribution: uniform | linear | quadratic | sqrt
+prob: 'quadratic'
+prob_permute: True
 
 # path assign
 path_prob: 'first'
