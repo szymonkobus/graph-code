@@ -1,55 +1,93 @@
 import argparse
 import sys
+from typing import Generator
 
 import yaml
+from torch import Tensor
+from tqdm import tqdm
 
 from bounds import (comm_bound, dist_comm_bound, dist_comm_bound_uniform,
                     distance_bound)
 from comm import get_comm
-from graph import get_graph, get_start
-from lossless import lossless_code
+from graph import Graph, get_graph, get_start
+from lossless import Paths, lossless_code
 from lossy import (expected_depth, junction_code, node_code_perf,
                    static_path_code_perf)
 from prob import get_path_prob, get_prob
+from writer import get_writer
 
 
-def run(graph, prob, start, comm, path_prob):
-    # GRAPH
-    print(f'Graph:\n{graph}\n')
+def loop(conf, graph_writer) \
+        -> Generator[tuple[Graph, Paths, int, Tensor], None, None]:
+    graph_writer.group_index(conf.n_start)
+    for graph_i in range(conf.n_graph):
+        if conf.load_graph and graph_i < len(graph_writer.index):
+            graph, tree_writer = graph_writer.load(graph_i)
+        else:
+            graph = get_graph(conf)
+            tree_writer = graph_writer.create(graph_i)
+        if conf.save_graph:
+            graph_writer.save(graph_i, graph)
+        
+        tree_writer.make_index_complement(len(graph))
+        if type(conf.start) is int:
+            tree_writer.force_start(conf.start)
+        for start_i in range(conf.n_start):            
+            if conf.load_paths and start_i < len(tree_writer.index):
+                paths, start = tree_writer.load(start_i)
+            else:
+                start = tree_writer.index_complement.pop()
+                paths = lossless_code(graph, start)
+                tree_writer.create(start_i, start)
+            if conf.save_paths:
+                tree_writer.save(start_i, paths)
+       
+            for _ in range(conf.n_prob):
+                prob = get_prob(conf, len(graph))
+                yield graph, paths, start, prob
 
-    # BOUNDS
-    L_d = distance_bound(graph, start, prob)
-    L_c = comm_bound(comm, prob)
-    L_cd = dist_comm_bound(graph, start, comm, prob)
-    # L_cd_u = dist_comm_bound_uniform(graph, start, comm)
-    print(f'distance bound      = {L_d:.5f}')
-    print(f'comm bound          = {L_c:.5f}')
-    print(f'comm distance bound = {L_cd:.5f}')
-    print()
-    # print('comm distance bound unifrom = {}'.format(L_cd_u))
 
-    # CODING:
-    # 1. node coding
-    assert comm.period==1
-    node_perf = node_code_perf(graph, prob, start, comm.n_symbols)
-    print(f'node coding perf:         {node_perf:.5f}')
-    
-    # 2. static path coding
-    paths = lossless_code(graph, start)
-    node_paths = path_prob(paths, len(graph), prob)
-    static_path_perf = static_path_code_perf(paths, prob, node_paths, 
-                                             comm.n_symbols)
-    print(f'static path coding perf:  {static_path_perf:.5f}')
-    
-    # 3. dynamic path coding
-    tree = junction_code(paths, prob, node_paths, comm.n_symbols)
-    dynamic_path_perf = expected_depth(tree, prob)
-    print(f'dynamic path coding perf: {dynamic_path_perf:.5f}')
-    
-    print()
-    print('n.o. shortest paths: {}'.format(len(paths)))
-    # print(tree.draw())
+def run(conf, graph, prob, start, comm, path_prob, graph_writer):
+     
+    tot = conf.n_graph * conf.n_start * conf.n_prob
+    for graph, paths, start, prob in tqdm(loop(conf, graph_writer), total=tot,
+                                          disable=(conf.verbose or conf.table)):
+        L_d = distance_bound(graph, start, prob)
+        L_c = comm_bound(comm, prob)
+        L_cd = dist_comm_bound(graph, start, comm, prob)
+        # L_cd_u = dist_comm_bound_uniform(graph, start, comm)
+        # 1. node coding
+        assert comm.period==1
+        node_perf = node_code_perf(graph, prob, start, comm.n_symbols)
+        # 2. static path coding
+        node_paths = path_prob(paths, len(graph), prob)
+        static_path_perf = static_path_code_perf(paths, prob, node_paths, 
+                                                 comm.n_symbols)
+        # 3. dynamic path coding
+        tree = junction_code(paths, prob, node_paths, comm.n_symbols)
+        dynamic_path_perf = expected_depth(tree, prob)
 
+        if conf.verbose:
+            # print(f'Graph:\n{graph}\n{start}')
+            print(f'distance bound:           {L_d:.5f}')
+            print(f'comm bound:               {L_c:.5f}')
+            print(f'comm distance bound:      {L_cd:.5f}')
+            # print(f'comm distance bound unifrom = {L_cd_u:.5f}')
+            print(f'node coding perf:         {node_perf:.5f}')
+            print(f'static path coding perf:  {static_path_perf:.5f}')
+            print(f'dynamic path coding perf: {dynamic_path_perf:.5f}')    
+            print()
+        
+        if conf.table:
+            print('{:.5f},{:.5f},{:.5f},{:.5f},{:.5f}'.format(
+                L_d, L_c, L_cd, node_perf, static_path_perf, dynamic_path_perf))
+
+
+def config_check(conf):
+    assert not (conf.n_graph!=1 and conf.graph_type=='grid')
+    assert not (conf.n_start!=1 and type(conf.start) is int)
+    assert not (conf.n_prob!=1 and not conf.prob_permute)
+    # TODO: add assert: using more n_start then there are points
 
 if __name__ == '__main__':
     config_file = sys.argv[1]
@@ -58,9 +96,11 @@ if __name__ == '__main__':
     conf = argparse.Namespace(**config_dic)
     print('CONF : {}'.format(conf))
 
+    config_check(conf)
     graph = get_graph(conf)
     start = get_start(conf, len(graph))
     prob = get_prob(conf, len(graph))
     path_prob = get_path_prob(conf)
     comm = get_comm(conf)
-    run(graph, prob, start, comm, path_prob)
+    graph_writer = get_writer(conf.save_path, conf)
+    run(conf, graph, prob, start, comm, path_prob, graph_writer)

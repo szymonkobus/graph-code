@@ -1,14 +1,14 @@
-# graph
+# GRAPH
 # graph_type: 'random'
-# dim: 1000
-# attachment_pow: 1
+# dim: 100
+attachment_pow: 1
 graph_type: 'grid'
 dim: [10, 10, 10]
 
 start: 'uniform'
 
 # goal distribution: uniform | linear | quadratic | sqrt
-prob: 'quadratic'
+prob: 'linear'
 prob_permute: True
 
 # path assign
@@ -18,4 +18,17 @@ path_prob: 'first'
 n_symbols: 2
 period: 1
 
-# algorithm
+# computation
+n_graph: 1
+n_start: 1
+n_prob:  1
+
+save_path: '../stored_graphs'
+load_graph: True
+save_graph: True
+load_paths: True
+save_paths: True
+
+# output
+verbose: True
+table: False
