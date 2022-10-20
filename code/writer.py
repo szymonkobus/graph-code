@@ -1,6 +1,7 @@
 import os
 import random
 
+import scipy.sparse
 import torch
 
 from graph import Graph
@@ -32,8 +33,13 @@ class TreeWriter:
         return len(names)
 
     def create(self, i: int, start: int) -> None:
-        assert len(self.index)==i
-        self.index.append((start, self.tree_name(start)))
+        assert len(self.index)>=i
+        entry = (start, self.tree_name(start))
+        if len(self.index)==i:
+            self.index.append(entry)
+        else:
+            self.index.append(self.index[i])
+            self.index[i] = entry
 
     def load(self, i: int) -> tuple[Paths, int]:
         start, name = self.index[i]
@@ -80,14 +86,25 @@ class GraphWriter:
         self.index = less_tresh + more_tresh
 
     def create(self, i: int) -> TreeWriter:
-        assert len(self.index)==i
-        self.index.append((0,) + self.graph_folder_name(i))
+        assert len(self.index)>=i
+        entry = (0,) + self.graph_folder_name(i)
+        if len(self.index)==i:
+            self.index.append(entry)
+        else:
+            self.index.append(self.index[i])
+            self.index[i] = entry
+        
         return TreeWriter(self.get_index_path(i))
 
     def load(self, i: int) -> tuple[Graph, TreeWriter]:
         graph_path = self.get_index_path(i)
-        adj = torch.load(f'{graph_path}/{self.graph_file_name()}')
-        graph = Graph(adj)
+        adj_name, sparse_name = self.graph_file_names()
+        adj = torch.load(f'{graph_path}/{adj_name}')
+        sparse_path = f'{graph_path}/{sparse_name}'
+        adj_sparse = None
+        if os.path.exists(sparse_path):
+            adj_sparse = scipy.sparse.load_npz(sparse_path)
+        graph = Graph(adj, adj_sparse=adj_sparse)
         tree_writer = TreeWriter(graph_path)
         return graph, tree_writer
 
@@ -95,9 +112,13 @@ class GraphWriter:
         graph_folder = self.get_index_path(i)
         if not os.path.exists(graph_folder):
             os.makedirs(graph_folder)
-        graph_path = f'{graph_folder}/{self.graph_file_name()}'
+        adj_name, sparse_name = self.graph_file_names()
+        graph_path = f'{graph_folder}/{adj_name}'
         if not os.path.exists(graph_path):
             torch.save(graph.adj, graph_path)
+        sparse_path = f'{graph_folder}/{sparse_name}'
+        if graph.has_sparse and not os.path.exists(sparse_path):
+            scipy.sparse.save_npz(sparse_path, graph.adj_sparse)
 
     ### NAMES ###
     def get_index_path(self, i: int) -> str:
@@ -116,8 +137,8 @@ class GraphWriter:
         self.minimnal = next + 1
         return next, f'graph_{next}'
 
-    def graph_file_name(self):
-        return 'graph.pt'
+    def graph_file_names(self) -> tuple[str,str]:
+        return 'graph_adj.pt', 'graph_sparse.npz'
 
 
 def get_writer(path, conf):

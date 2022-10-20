@@ -1,8 +1,9 @@
 from collections import deque
 from itertools import chain
-from typing import Generator, Optional
+from typing import Generator
 
 import torch
+from scipy.sparse.csgraph import csgraph_from_dense, maximum_flow
 from torch import Tensor
 
 from graph import Graph
@@ -13,6 +14,7 @@ Paths = list[list[int]]
 
 def lossless_code_NP(graph: Graph, start: int) -> Paths:
     dag = path_dag(graph, start)
+    assert dag is not None
     paths = dag_covering_paths(dag, start)
     assert len(paths) < 25
     _, paths = set_cover(paths, len(graph))
@@ -23,6 +25,7 @@ def lossless_code(graph: Graph, start: int) -> Paths:
     #   n-out    n-in   source  sink 
     # [0,N-1], [N,2N-1], [2N], [2N+1] 
     dag = path_dag(graph, start)
+    assert dag is not None
     dag_tc = transitive_closure_dag(dag)
     N = len(graph)
     source, sink = 2*N, 2*N + 1
@@ -31,7 +34,7 @@ def lossless_code(graph: Graph, start: int) -> Paths:
     capacity[:N,N:2*N] = dag_tc.adj
     capacity[N:2*N,sink] = 1
 
-    flow = find_unitary_flow(capacity, source, sink)
+    flow = find_maximum_flow(capacity, source, sink)
 
     path_adj = flow[:N,N:2*N]
     paths = path_cover_from_adj(path_adj)
@@ -40,7 +43,14 @@ def lossless_code(graph: Graph, start: int) -> Paths:
     return origin_paths
 
 
-def find_unitary_flow(capacity: Tensor, source: int, sink: int):
+def find_maximum_flow(capacity: Tensor, source: int, sink: int) -> Tensor:
+    capacity_csg = csgraph_from_dense(capacity).astype(int)
+    flow_result = maximum_flow(capacity_csg, source, sink)
+    flow = flow_result.residual.todense()
+    return torch.tensor(flow, dtype=torch.int)
+
+
+def find_unitary_flow(capacity: Tensor, source: int, sink: int) -> Tensor:
     M = len(capacity)
     flow = torch.zeros((M, M), dtype=torch.int)
     for _ in range(M):
@@ -63,7 +73,7 @@ def find_path(graph: Graph, start: int, end: int) -> list[int]:
     for _ in range(len(graph)):
         if node == start:
             return [node for node in reversed(path)]
-        node = torch.argmax(graph_dag.adj[:,node]).item() # type: ignore
+        node: int = torch.argmax(graph_dag.adj[:,node]).item() # type: ignore
         path.append(node)   
     return []
 
@@ -74,7 +84,7 @@ def find_root_path_dag(dag: Graph, start: int, end: int) -> list[int]:
     for _ in range(len(dag)):
         if node == start:
             return [node for node in reversed(path)]
-        node = torch.argmax(dag.adj[:,node]).item() # type: ignore
+        node: int = torch.argmax(dag.adj[:,node]).item() # type: ignore
         path.append(node)
     return []
 
@@ -132,25 +142,25 @@ def path_cover_from_adj(adj: Tensor) -> Paths:
 
 
 def edge_iterator(adj: Tensor) -> Generator[tuple[int, int], None, None]:
-    for i, edges in enumerate(adj):
-        for j, connected in enumerate(edges):
-            if connected == 1:
-                yield i, j
+    sparse_adj = csgraph_from_dense(adj).astype(int)
+    for i, j, d in zip(*sparse_adj.nonzero(), sparse_adj.data):
+        if d==1:
+            yield i, j
 
 
 def transitive_closure_dag(graph: Graph) -> Graph:
     adj = torch.zeros((len(graph), len(graph)), dtype=torch.int)
-    mem = [None]*len(graph)
+    mem : list[Tensor|None] = [None]*len(graph)
     for node in range(len(graph)):
         adj_node, mem = all_reachable(graph, node, mem)
         adj[node] = adj_node
     return Graph(adj)
 
 
-def all_reachable(graph: Graph, node: int, mem: list[Optional[Tensor]]) -> \
-        tuple[Tensor, list[Tensor]]: 
+def all_reachable(graph: Graph, node: int, mem: list[Tensor|None]) -> \
+        tuple[Tensor, list[Tensor|None]]: 
     if mem[node] is not None:
-        return mem[node], mem
+        return mem[node], mem  # type: ignore
     
     children = graph.adj[node]
     adj = torch.clone(children)
@@ -166,7 +176,7 @@ def all_reachable(graph: Graph, node: int, mem: list[Optional[Tensor]]) -> \
 
 def patch_paths(paths: Paths, dag: Graph) -> Paths:
     full_paths = []
-    for i, path in enumerate(paths):
+    for _, path in enumerate(paths):
         segments: list[list[int]] = []
         cut = 0
         for j, (node, next_node) in enumerate(zip(path[:-1], path[1:])):

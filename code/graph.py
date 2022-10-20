@@ -2,15 +2,26 @@ from random import randint
 from typing import Any
 
 import torch
+from scipy.sparse.csgraph import csgraph_from_dense
 from torch import Tensor
 
 
 class Graph:
-    def __init__(self, adj: Tensor, node_name: list[str] | None = None):
+    def __init__(self, adj: Tensor, node_name: list[str] | None = None,
+                 adj_sparse = None):
         self.adj = adj
         self.node_name = node_name
         if node_name is None:
             self.node_name = [str(i) for i in range(len(self))]
+        self.has_sparse = False
+        self._sparse = adj_sparse
+
+    @property
+    def adj_sparse(self):
+        if self._sparse is None:
+            self._sparse = csgraph_from_dense(self.adj).astype(int)
+            self.has_sparse = True
+        return self._sparse
 
     def __len__(self):
         return self.adj.shape[0]

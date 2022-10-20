@@ -1,3 +1,5 @@
+import numpy as np
+import scipy.sparse.csgraph
 import torch
 from torch import Tensor
 
@@ -11,6 +13,13 @@ def distance_bound(graph: Graph, start: int, prob: Tensor) -> float:
 
 
 def node_distance(graph: Graph, start: int) -> Tensor:
+    distances = scipy.sparse.csgraph.shortest_path(graph.adj_sparse, 
+                                                   indices=start, method='D')
+    distances[distances==np.inf] = -1
+    return torch.tensor(distances, dtype=torch.int)
+
+
+def node_distance_(graph: Graph, start: int) -> Tensor:
     N = len(graph)
     visited = torch.zeros((N,), dtype=torch.bool)
     current = torch.zeros((N,), dtype=torch.bool)
@@ -43,8 +52,8 @@ def dist_comm_bound(graph: Graph, start: int, comm: Comm, prob: Tensor) \
     bound, depth, width = 0.0, 0, 1
     distance = node_distance(graph, start)
     max_distance = torch.max(distance)
-    depths = [[j.item() for j in (distance==i).nonzero(as_tuple=True)[0]]
-        for i in range(max_distance+1)]
+    depths = [[int(j.item()) for j in (distance==i).nonzero(as_tuple=True)[0]]
+              for i in range(max_distance+1)]
     curr: list[int] = []
     while len(curr) != 0 or depth <= max_distance:
         if depth < len(depths):

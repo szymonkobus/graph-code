@@ -6,10 +6,9 @@ import yaml
 from torch import Tensor
 from tqdm import tqdm
 
-from bounds import (comm_bound, dist_comm_bound, dist_comm_bound_uniform,
-                    distance_bound)
+from bounds import comm_bound, dist_comm_bound, distance_bound
 from comm import get_comm
-from graph import Graph, get_graph, get_start
+from graph import Graph, get_graph
 from lossless import Paths, lossless_code
 from lossy import (expected_depth, junction_code, node_code_perf,
                    static_path_code_perf)
@@ -27,6 +26,7 @@ def loop(conf, graph_writer) \
             graph = get_graph(conf)
             tree_writer = graph_writer.create(graph_i)
         if conf.save_graph:
+            _ = graph.adj_sparse
             graph_writer.save(graph_i, graph)
         
         tree_writer.make_index_complement(len(graph))
@@ -37,8 +37,8 @@ def loop(conf, graph_writer) \
                 paths, start = tree_writer.load(start_i)
             else:
                 start = tree_writer.index_complement.pop()
-                paths = lossless_code(graph, start)
                 tree_writer.create(start_i, start)
+                paths = lossless_code(graph, start)
             if conf.save_paths:
                 tree_writer.save(start_i, paths)
        
@@ -47,7 +47,7 @@ def loop(conf, graph_writer) \
                 yield graph, paths, start, prob
 
 
-def run(conf, graph, prob, start, comm, path_prob, graph_writer):
+def run(conf, comm, path_prob, graph_writer):
      
     tot = conf.n_graph * conf.n_start * conf.n_prob
     for graph, paths, start, prob in tqdm(loop(conf, graph_writer), total=tot,
@@ -97,10 +97,7 @@ if __name__ == '__main__':
     print('CONF : {}'.format(conf))
 
     config_check(conf)
-    graph = get_graph(conf)
-    start = get_start(conf, len(graph))
-    prob = get_prob(conf, len(graph))
     path_prob = get_path_prob(conf)
     comm = get_comm(conf)
     graph_writer = get_writer(conf.save_path, conf)
-    run(conf, graph, prob, start, comm, path_prob, graph_writer)
+    run(conf, comm, path_prob, graph_writer)
