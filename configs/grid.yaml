@@ -1,10 +1,11 @@
 # GRAPH
 # graph_type: 'random'
-# dim: 100
-attachment_pow: 1
+# dim: 1000
+# attachment_pow: 1
 graph_type: 'grid'
 dim: [10, 10, 10]
-
+# graph_type: 'grid_skip'
+# skip_connections: 40
 start: 'uniform'
 
 # goal distribution: uniform | linear | quadratic | sqrt
@@ -30,5 +31,5 @@ load_paths: True
 save_paths: True
 
 # output
-verbose: True
-table: False
+verbose: False
+table: True

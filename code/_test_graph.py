@@ -2,8 +2,8 @@ import unittest
 
 import torch
 
-from graph import (Graph, create_grid, create_random_graph, int_to_vec,
-                   vec_to_int)
+from graph import (Graph, create_grid, create_grid_skip, create_random_graph,
+                   int_to_vec, vec_to_int)
 
 
 class GraphTest(unittest.TestCase):
@@ -72,6 +72,22 @@ class GraphTest(unittest.TestCase):
             exp_adj[i+6][i] = 1
 
         self.assertTrue(torch.all(graph.adj==exp_adj))
+
+    def test_create_grid_skip_1(self):
+        grid = create_grid_skip([2, 2], 0)
+        exp_adj = torch.tensor([[0, 1, 1, 0],
+                                [1, 0, 0, 1],
+                                [1, 0, 0, 1],
+                                [0, 1, 1, 0],])
+        self.assertTrue(torch.all(grid.adj==exp_adj))
+
+    def test_create_grid_skip_2(self):
+        grid = create_grid_skip([2, 2], 2)
+        exp_adj = torch.tensor([[0, 1, 1, 1],
+                                [1, 0, 1, 1],
+                                [1, 1, 0, 1],
+                                [1, 1, 1, 0],])
+        self.assertTrue(torch.all(grid.adj==exp_adj))
     
     def test_create_random_graph(self):
         for size in [2, 20, 200]:

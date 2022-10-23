@@ -129,6 +129,8 @@ class GraphWriter:
         other = ''
         if conf.graph_type=='random':
             other = f'_A{conf.attachment_pow}'
+        if conf.graph_type=='grid_skip':
+            other = f'_skip{conf.skip_connections}'
         return f'G_{conf.graph_type}_D{conf.dim}{other}'
 
     def graph_folder_name(self, i: int) -> tuple[int, str]:

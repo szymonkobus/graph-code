@@ -1,7 +1,7 @@
 from collections import defaultdict
 from heapq import heapify, heappop, heappush
 from itertools import chain
-from typing import Callable, Sequence, TypeVar
+from typing import Any, Callable, Sequence, TypeVar
 
 from bounds import distance_bound
 from graph import Graph
@@ -32,7 +32,7 @@ def join_nodes(parent_template: TNode, children: list[TNode]) -> TNode:
     return parent
 
 
-def huffman(items: list[I], prob: Sequence[float], join: Callable[..., I],
+def huffman(items: list[Any], prob: Sequence[float], join: Callable[..., I],
             degree: int = 2) -> I:
     heap = [(p, -i, item) for i, (item, p) in enumerate(zip(items, prob))]
     if degree != 2:
@@ -65,7 +65,7 @@ def static_path_code_perf(paths: Paths, prob: Sequence[float],
         prob_paths[path] += prob[node]
     path_tree = node_code(prob_paths, len(paths), degree=degree)
     avg_n_code = expected_depth(path_tree, prob_paths)
-    avg_n_move = distance_bound_paths(paths, node_paths, prob)
+    avg_n_move = distance_bound_paths(paths, prob)
     return avg_n_move + (avg_n_code - 1)
 
 
@@ -105,7 +105,7 @@ def least_depth_rec(tree: TNode, depths: list[int | None], depth: int) \
     return depths
 
 
-def distance_bound_paths(paths: Paths, node_paths: Sequence[int],
+def distance_bound_paths_(paths: Paths, node_paths: Sequence[int],
                          prob: Sequence[float]) -> float:
     '''calculates expected distance to each vertex'''
     avg_distance = 0.
@@ -114,6 +114,18 @@ def distance_bound_paths(paths: Paths, node_paths: Sequence[int],
             if node_paths[node]==n_path:
                 avg_distance += depth * prob[node]
     return avg_distance
+
+
+def distance_bound_paths(paths: Paths, prob: Sequence[float]) -> float:
+    '''calculates expected distance to each vertex'''
+    N = max([max(path) for path in paths]) + 1
+    depths = [-1] * N
+    for path in paths:
+        for depth, node in enumerate(path):
+            if depths[node]==-1 or depths[node] > depth:
+                depths[node] = depth
+    assert not -1 in depths
+    return sum([d*p for d,p in zip(depths, prob)])
 
 
 def junction_code_graph(

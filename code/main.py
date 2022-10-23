@@ -48,10 +48,9 @@ def loop(conf, graph_writer) \
 
 
 def run(conf, comm, path_prob, graph_writer):
-     
     tot = conf.n_graph * conf.n_start * conf.n_prob
     for graph, paths, start, prob in tqdm(loop(conf, graph_writer), total=tot,
-                                          disable=(conf.verbose or conf.table)):
+                                          disable=(conf.verbose)):
         L_d = distance_bound(graph, start, prob)
         L_c = comm_bound(comm, prob)
         L_cd = dist_comm_bound(graph, start, comm, prob)
@@ -79,7 +78,7 @@ def run(conf, comm, path_prob, graph_writer):
             print()
         
         if conf.table:
-            print('{:.5f},{:.5f},{:.5f},{:.5f},{:.5f}'.format(
+            print('{},{},{},{},{},{}'.format(
                 L_d, L_c, L_cd, node_perf, static_path_perf, dynamic_path_perf))
 
 
@@ -94,7 +93,9 @@ if __name__ == '__main__':
     with open(config_file) as file:
         config_dic = yaml.safe_load(file)
     conf = argparse.Namespace(**config_dic)
-    print('CONF : {}'.format(conf))
+    print('# CONF : {}'.format(conf))
+    if conf.table:
+        print('L_d,L_c,L_cd,P_n,P_SP,P_DP')
 
     config_check(conf)
     path_prob = get_path_prob(conf)

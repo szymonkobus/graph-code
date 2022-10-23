@@ -178,10 +178,9 @@ class LossyTest(unittest.TestCase):
 
     def test_distance_bound_paths(self):
         paths = [[0,1,2,5,8], [0,3,4,7], [0,3,6]]
-        node_paths = [0,0,0,2,1,0,2,1,0]
         prob = [0.1]*9
         prob[1] = 0.2
-        avg_distance = distance_bound_paths(paths, node_paths, prob)
+        avg_distance = distance_bound_paths(paths, prob)
         exp_avg_distance = 1.9
         self.assertTrue(abs(avg_distance-exp_avg_distance)<1e-8)
 

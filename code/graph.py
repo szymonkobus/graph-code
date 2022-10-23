@@ -35,6 +35,8 @@ def get_graph(conf: Any) -> Graph:
     match conf.graph_type:
         case 'grid':
             return create_grid(conf.dim)
+        case 'grid_skip':
+            return create_grid_skip(conf.dim, conf.skip_connections)
         case 'random' | 'NLPA':
             return create_random_graph(conf.dim, conf.attachment_pow)
         case x:
@@ -62,6 +64,19 @@ def create_grid(dim: list[int]) -> Graph:
                 adj[j][i] = 1
 
     return Graph(adj)
+
+
+def create_grid_skip(dim: list[int], skip_connections: int) -> Graph:
+    grid = create_grid(dim)
+    L = len(grid)
+    for _ in range(skip_connections):
+        while True:
+            i, j = randint(0, L-1), randint(0, L-1)
+            if grid.adj[i,j]==0 and i!=j:
+                break
+        grid.adj[i,j]=1
+        grid.adj[j,i]=1
+    return grid
 
 
 def create_random_graph(dim: int, alpha: float, connect: bool = True) -> Graph:
