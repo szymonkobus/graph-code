@@ -2,10 +2,11 @@
 # graph_type: 'random'
 # dim: 1000
 # attachment_pow: 1
-graph_type: 'grid'
-dim: [10, 10, 10]
-# graph_type: 'grid_skip'
-# skip_connections: 40
+# graph_type: 'grid'
+dim: [10, 10]
+graph_type: 'grid_skip'
+skip_connections: [0, 496800]
+
 start: 'uniform'
 
 # goal distribution: uniform | linear | quadratic | sqrt

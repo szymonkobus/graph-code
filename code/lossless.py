@@ -8,7 +8,6 @@ from torch import Tensor
 
 from graph import Graph
 
-
 Paths = list[list[int]]
 
 
@@ -178,21 +177,12 @@ def patch_paths(paths: Paths, dag: Graph) -> Paths:
     full_paths = []
     for _, path in enumerate(paths):
         segments: list[list[int]] = []
-        cut = 0
-        for j, (node, next_node) in enumerate(zip(path[:-1], path[1:])):
+        for node, next_node in zip(path[:-1], path[1:]):
+            segments.append([node])
             if dag.adj[node, next_node]!=1:
-                cut = j + 1
-                segments.append(path[:cut])
-                # applies dag to dag to find the path
                 segments.append(find_path(dag, node, next_node)[1:-1])
-            if cut != 0:
-                segments.append(path[cut:])
-        
-        if len(segments) == 0:
-            full_paths.append(path)
-        else:
-            full_path = list(chain.from_iterable(segments))
-            full_paths.append(full_path)
+        segments.append([path[len(path)-1]])
+        full_paths.append(list(chain.from_iterable(segments)))
     return full_paths
 
 

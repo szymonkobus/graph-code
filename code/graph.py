@@ -1,6 +1,7 @@
-from random import randint
+from random import randint, random
 from typing import Any
 
+import numpy as np
 import torch
 from scipy.sparse.csgraph import csgraph_from_dense
 from torch import Tensor
@@ -36,7 +37,13 @@ def get_graph(conf: Any) -> Graph:
         case 'grid':
             return create_grid(conf.dim)
         case 'grid_skip':
-            return create_grid_skip(conf.dim, conf.skip_connections)
+            if type(conf.skip_connections) is int:
+                return create_grid_skip(conf.dim, conf.skip_connections)
+            elif type(conf.skip_connections) is list:
+                return create_grid_skip_range(conf.dim, conf.skip_connections)
+            else:
+                mes = f'Graph \'{conf.skip_connections}\' not implemented.'
+                raise TypeError(mes)
         case 'random' | 'NLPA':
             return create_random_graph(conf.dim, conf.attachment_pow)
         case x:
@@ -67,6 +74,26 @@ def create_grid(dim: list[int]) -> Graph:
 
 
 def create_grid_skip(dim: list[int], skip_connections: int) -> Graph:
+    '''creates grid with random \'skip\' edges; adds them all at once'''
+    grid = create_grid(dim)
+    if skip_connections==0:
+        return grid
+    L = len(grid)
+    limit = L*(L-1)/2 - torch.sum(grid.adj)/2
+    assert skip_connections <= limit, \
+        f'skip_connections:{skip_connections} > limit {limit}'
+
+    u = torch.rand((L, L)) * (grid.adj != 1)
+    u_tri = torch.tril(u, diagonal=-1).flatten()
+    vals, _ = torch.topk(u_tri, skip_connections)
+    limit = torch.min(vals)
+    connections = (u_tri >= limit).to(dtype=torch.int).view((L, L))
+    grid.adj = grid.adj + connections + connections.T
+    return grid
+
+
+def create_grid_skip_serial(dim: list[int], skip_connections: int) -> Graph:
+    '''creates grid with random \'skip\' edges; adds them one by one'''
     grid = create_grid(dim)
     L = len(grid)
     for _ in range(skip_connections):
@@ -77,6 +104,19 @@ def create_grid_skip(dim: list[int], skip_connections: int) -> Graph:
         grid.adj[i,j]=1
         grid.adj[j,i]=1
     return grid
+
+
+def create_grid_skip_range(dim: list[int], skip_range: list[int]) -> Graph:
+    skip_connections = draw_exp(*skip_range, base=10)
+    return create_grid_skip(dim, skip_connections)
+
+
+def draw_exp(lower: int, upper: int, base: int) -> int:
+    log_lower = np.log(lower+0.1) / np.log(base)
+    log_upper = np.log(upper+0.1) / np.log(base)
+    u = log_lower + (log_upper-log_lower)*random()
+    x = base**u
+    return int(x)
 
 
 def create_random_graph(dim: int, alpha: float, connect: bool = True) -> Graph:

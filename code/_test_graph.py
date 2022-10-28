@@ -89,6 +89,11 @@ class GraphTest(unittest.TestCase):
                                 [1, 1, 1, 0],])
         self.assertTrue(torch.all(grid.adj==exp_adj))
     
+    def test_create_grid_skip_3(self):
+        for skip in [0, 2, 20, 200]:
+            grid = create_grid_skip([10, 10], skip)
+            self.assertEqual(torch.sum(grid.adj), 360 + 2*skip)
+    
     def test_create_random_graph(self):
         for size in [2, 20, 200]:
             graph = create_random_graph(size, 1.)
