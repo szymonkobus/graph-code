@@ -47,6 +47,19 @@ def comm_bound(comm: Comm, prob: Tensor) -> float:
     return cum_dist.item()
 
 
+def ordered_dist(alph_size: int, i: int) -> int:
+    l = np.log((alph_size-1)*i+1)
+    return np.floor(l/np.log(alph_size))
+
+
+def comm_bound_closed(alph_size: int, prob: Tensor) -> float:
+    cum_dist = torch.zeros((1,))
+    prob_srt, _ = torch.sort(prob, descending=True)
+    for i, p in enumerate(prob_srt):
+        cum_dist += ordered_dist(alph_size, i) * p
+    return cum_dist.item()
+
+
 def dist_comm_bound(graph: Graph, start: int, comm: Comm, prob: Tensor) \
         -> float:
     bound, depth, width = 0.0, 0, 1

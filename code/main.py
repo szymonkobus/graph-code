@@ -50,7 +50,7 @@ def loop(conf, graph_writer) \
 def run(conf, comm, path_prob, graph_writer):
     tot = conf.n_graph * conf.n_start * conf.n_prob
     for graph, paths, start, prob in tqdm(loop(conf, graph_writer), total=tot,
-                                          disable=(conf.verbose)):
+                                          disable=(conf.verbose), width=79):
         L_d = distance_bound(graph, start, prob)
         L_c = comm_bound(comm, prob)
         L_cd = dist_comm_bound(graph, start, comm, prob)

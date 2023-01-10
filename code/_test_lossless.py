@@ -21,7 +21,8 @@ class LosslessTest(unittest.TestCase):
         exp_adj[2,3] = 1   # 2 steps
         exp_adj[3,4] = 1   # 3 steps
 
-        self.assertTrue(torch.all(graph_dag.adj==exp_adj))
+        self.assertIsNotNone(graph_dag)
+        self.assertTrue(torch.all(graph_dag.adj==exp_adj)) # type: ignore
 
     def test_dag_2D_1(self):
         grid = create_grid([3, 2])
@@ -36,7 +37,8 @@ class LosslessTest(unittest.TestCase):
         exp_adj[2,5] = 1   # 2 steps
         exp_adj[4,5] = 1   # 2 steps
 
-        self.assertTrue(torch.all(graph_dag.adj==exp_adj))
+        self.assertIsNotNone(graph_dag)
+        self.assertTrue(torch.all(graph_dag.adj==exp_adj)) # type: ignore
         
     def test_dag_2D_2(self):
         graph = create_grid([3, 2])
@@ -54,7 +56,8 @@ class LosslessTest(unittest.TestCase):
         exp_adj[2,5] = 1   # 3 steps
         exp_adj[4,5] = 1   # 3 steps
 
-        self.assertTrue(torch.all(graph_dag.adj==exp_adj))
+        self.assertIsNotNone(graph_dag)
+        self.assertTrue(torch.all(graph_dag.adj==exp_adj)) # type: ignore
     
     def test_dag_2D_end(self):
         graph = create_grid([3, 2])
@@ -70,13 +73,14 @@ class LosslessTest(unittest.TestCase):
         exp_adj[1,4] = 1   # 2 steps
         exp_adj[3,4] = 1   # 2 steps
 
-        self.assertTrue(torch.all(graph_dag.adj==exp_adj))
+        self.assertIsNotNone(graph_dag)
+        self.assertTrue(torch.all(graph_dag.adj==exp_adj)) # type: ignore
         
     def test_dag_paths_rev(self):
         graph = create_grid([3, 2])
         graph_dag = path_dag(graph, 0)
 
-        paths = dag_paths_rev(graph_dag, 0)
+        paths = dag_paths_rev(graph_dag, 0) # type: ignore
 
         expected_paths = [
             [0], [0, 1], [0, 1, 2], [0, 1, 2, 5], 

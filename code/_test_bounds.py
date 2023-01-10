@@ -1,8 +1,8 @@
 import unittest
 
 import torch
-
-from bounds import comm_bound, dist_comm_bound, distance_bound, node_distance
+from bounds import (comm_bound, comm_bound_closed, dist_comm_bound,
+                    distance_bound, node_distance)
 from comm import Comm
 from graph import create_grid
 
@@ -11,7 +11,7 @@ class BoundsTest(unittest.TestCase):
     def test_distance_1(self):
         graph = create_grid([20])
         distance = node_distance(graph, 3)
-        exp_distance = torch.empty((20,), dtype=int)                
+        exp_distance = torch.empty((20,), dtype=torch.int)                
         exp_distance[0:4] = torch.tensor([3,2,1,0])
         exp_distance[3:] = torch.arange(17)
         self.assertTrue(torch.all(distance == exp_distance))
@@ -58,6 +58,24 @@ class BoundsTest(unittest.TestCase):
         prob = torch.Tensor([0, 2/3, 1/6, 1/6] + [0]*5)
         bound = comm_bound(comm, prob)
         exp_bound = 1/3
+        self.assertTrue(abs(bound-exp_bound) < 1e-6)
+
+    def test_communication_bound_unifrom_closed(self):
+        prob = torch.Tensor([1/9]).expand(9)
+        bound = comm_bound_closed(2, prob)
+        exp_bound = sum([0, 1, 1, 2, 2, 2, 2, 3, 3]) / 9
+        self.assertTrue(abs(bound-exp_bound) < 1e-6)
+
+    def test_communication_bound_closed(self):
+        prob = torch.Tensor([0, 2/3, 1/6, 1/6] + [0]*5)
+        bound = comm_bound_closed(2, prob)
+        exp_bound = 1/3
+        self.assertTrue(abs(bound-exp_bound) < 1e-6)
+
+    def test_communication_bound_closed_ternary(self):
+        prob = torch.Tensor([1, 2/3, 1/6, 1/6, 1/6] + [0]*5)
+        bound = comm_bound_closed(3, prob)
+        exp_bound = 1 + 1/3
         self.assertTrue(abs(bound-exp_bound) < 1e-6)
 
     def test_distance_communication_bound_uniform(self):
